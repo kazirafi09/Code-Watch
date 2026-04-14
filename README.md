@@ -52,7 +52,7 @@ You'll need **three terminals open at once**: one for Ollama, one for the backen
 ### Step 1 — Clone the repo
 
 ```bash
-git clone https://github.com/<your-username>/codewatch.git
+git clone https://github.com/kazirafi09/Code-Watch.git
 cd codewatch
 ```
 
