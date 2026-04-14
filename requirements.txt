@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+watchdog
+sqlmodel
+pydantic-settings
+plyer
+python-dotenv
+pyyaml
+httpx
+pathspec

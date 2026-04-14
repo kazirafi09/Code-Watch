@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  codewatch:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ./codewatch.db:/app/codewatch.db
+      # Mount project folders you want to watch, e.g.:
+      # - /path/to/your/project:/projects/myproject:ro
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

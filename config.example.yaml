@@ -1,0 +1,55 @@
+# Ollama
+model: "gemma4:e4b"  # Set to a model you've pulled (e.g. qwen2.5-coder:3b, llama3.2, codellama)
+ollama_url: http://localhost:11434
+ollama_timeout_seconds: 120
+
+# Watching
+watch_extensions:
+  - .py
+  - .js
+  - .ts
+  - .tsx
+  - .jsx
+  - .go
+  - .rs
+  - .java
+  - .cpp
+  - .c
+  - .h
+  - .rb
+  - .php
+  - .cs
+  - .kt
+  - .swift
+ignore_patterns:
+  - node_modules
+  - __pycache__
+  - .git
+  - dist
+  - build
+  - .venv
+  - .env
+respect_gitignore: true
+debounce_seconds: 1.5
+max_file_lines: 400
+skip_unchanged: true
+
+# Review behavior
+review_mode: auto    # auto (diff when possible, full otherwise) | always_full | always_diff
+max_concurrency: 1   # Local LLM — 1 is usually best
+prompt_max_chars: 16000
+
+# Notifications
+notifications:
+  desktop: true
+  desktop_severities:
+    - critical
+    - warning
+  telegram: false
+  telegram_severities:
+    - critical
+  telegram_token: ""      # Prefer .env
+  telegram_chat_id: ""    # Prefer .env
+
+# Misc
+log_level: INFO
