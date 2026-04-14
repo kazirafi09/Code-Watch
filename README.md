@@ -87,15 +87,7 @@ install.bat
 
 This creates a Python virtualenv, installs backend requirements, runs `npm install` in `frontend/`, and builds the frontend bundle.
 
-### Step 4 — Configure
-
-```bash
-cp config.example.yaml config.yaml
-```
-
-Open `config.yaml` and set `model:` to the exact tag shown by `ollama list`, e.g. `model: "qwen2.5-coder:7b"`.
-
-### Step 5 — Start the backend
+### Step 4 — Start the backend
 
 ```bash
 # Terminal 2 — Backend
@@ -115,7 +107,7 @@ uvicorn backend.main:app --reload --port 8000
 [INFO] backend.main: CodeWatch is ready. Open http://localhost:8000
 ```
 
-### Step 6 — (Optional) Start the frontend dev server
+### Step 5 — (Optional) Start the frontend dev server
 
 Only needed if you're hacking on the UI. The backend already serves the built frontend at `http://localhost:8000`.
 
@@ -125,6 +117,14 @@ cd frontend
 npm run dev      # http://localhost:5173, proxies to backend
 ```
 
+### Step 6 — Pick your model
+
+1. Open **http://localhost:8000** in a browser.
+2. Click the **gear** icon to open Settings.
+3. CodeWatch queries Ollama and lists every model you've pulled in the **Model** dropdown. Pick one and click **Save**.
+
+This writes `config.yaml` for you — no manual editing required. You can switch models here at any time; changes hot-reload.
+
 ### Step 7 — Add your first project
 
 1. Open **http://localhost:8000** in a browser.
@@ -133,6 +133,7 @@ npm run dev      # http://localhost:5173, proxies to backend
 4. Save. The backend log should print `Watching project '<name>' at <path>`.
 
 ### Step 8 — Trigger your first review
+
 
 Edit any file with a watched extension (`.py`, `.js`, `.ts`, etc.) in that project and save. Within a second or two you should see:
 
@@ -160,11 +161,11 @@ Severity is auto-detected from the review text:
 
 ## Configuration reference
 
-Edit `config.yaml` after installation. Changes to most settings take effect immediately via the Settings page — no restart needed.
+Most settings are edited in the in-app **Settings** page and take effect immediately — no restart, no YAML hand-editing. `config.yaml` is written by the app; you only need to touch it if you want to pre-seed defaults before first launch (copy `config.example.yaml` → `config.yaml`).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `model` | string | `""` | **Required.** Must match a model you've pulled in Ollama (run `ollama list`) |
+| `model` | string | `""` | **Required.** Pick from the Settings dropdown (populated from `ollama list`). |
 | `ollama_url` | string | `http://localhost:11434` | Ollama API base URL |
 | `ollama_timeout_seconds` | int | `120` | Per-request timeout |
 | `watch_extensions` | list | `.py .js .ts ...` | File extensions to watch |
@@ -194,11 +195,7 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 ## Changing the model
 
-**Via UI:** open Settings, pick from the model dropdown (populated from Ollama), click Save.
-
-**Via config.yaml:** set `model: your-model-name` and save — CodeWatch hot-reloads the config.
-
-The model name must exactly match the tag shown by `ollama list`.
+Open **Settings** in the UI, pick from the model dropdown (populated from your local Ollama via `/api/tags`), click **Save**. CodeWatch hot-reloads — no restart needed. Pull a new model with `ollama pull <name>` and it appears in the dropdown on the next open.
 
 ---
 
@@ -214,7 +211,7 @@ The model name must exactly match the tag shown by `ollama list`.
    TELEGRAM_TOKEN=your_token_here
    TELEGRAM_CHAT_ID=your_chat_id_here
    ```
-4. Enable in Settings or set `notifications.telegram: true` in `config.yaml`
+4. Enable in Settings → Notifications → Telegram
 
 ---
 
@@ -251,11 +248,11 @@ A save can reach the watcher but get rejected by these gates (in order):
 - File exceeds `max_file_lines` (default 400)
 - `skip_unchanged: true` and content hash is identical to the last review
 
-Set `log_level: DEBUG` in `config.yaml` to see `Skipping …` messages with the reason.
+Set `log_level` to `DEBUG` in Settings to see `Skipping …` messages with the reason.
 
 ### Reviews are useless / hallucinate issues / every review is marked critical
 
-**Your model is too small.** Models in the 3–4B range frequently invent issues, miss real bugs, and echo severity words from the prompt. Pull a 7B+ code-tuned model (`qwen2.5-coder:7b`, `deepseek-coder-v2`) and set it in `config.yaml`.
+**Your model is too small.** Models in the 3–4B range frequently invent issues, miss real bugs, and echo severity words from the prompt. Pull a 7B+ code-tuned model (`qwen2.5-coder:7b`, `deepseek-coder-v2`) and select it in Settings.
 
 If severity still looks wrong after that, the model is probably not emitting the expected `### [critical|warning|suggestion]` header format — the severity detector in `reviewer.py` falls back to keyword matching, which can misfire if the model quotes rule text verbatim.
 
@@ -265,10 +262,6 @@ If severity still looks wrong after that, the model is probably not emitting the
 curl http://localhost:11434/api/tags
 ```
 If this fails, Ollama isn't running or a firewall is blocking it. Start it with `ollama serve` or launch the desktop app.
-
-### Model name mismatch
-
-The `model:` value in `config.yaml` must match a tag from `ollama list` **exactly**, including the `:tag` suffix (e.g. `qwen2.5-coder:7b`, not `qwen2.5-coder`).
 
 ### Port 8000 already in use
 
@@ -297,10 +290,10 @@ Configuration stays in `config.yaml`; only the SQLite DB is reset.
 ## Docker
 
 ```bash
-cp config.example.yaml config.yaml
-# edit config.yaml
 docker compose up --build
 ```
+
+Then open `http://localhost:8000`, go to Settings, and pick a model from the dropdown.
 
 Ollama must be running on the host. The container reaches it via `host.docker.internal:11434`.
 
