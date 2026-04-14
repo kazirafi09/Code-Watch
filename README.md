@@ -45,27 +45,101 @@ CodeWatch works with any model — you choose what to use.
 
 ---
 
-## Quick start
+## Quick start (step-by-step)
 
-**Unix / macOS:**
+You'll need **three terminals open at once**: one for Ollama, one for the backend, one for the frontend (dev only). In production you only need Ollama + backend.
+
+### Step 1 — Clone the repo
+
 ```bash
 git clone https://github.com/<your-username>/codewatch.git
 cd codewatch
+```
+
+### Step 2 — Pull a model with Ollama
+
+CodeWatch needs a model that's actually capable of parsing code. **Small models (≤4B) produce unreliable reviews.** Recommended:
+
+```bash
+ollama pull qwen2.5-coder:7b     # best balance for most machines
+# or
+ollama pull gemma2:9b             # larger, stronger reasoning
+```
+
+Keep Ollama running in its own terminal (or use the desktop app):
+
+```bash
+# Terminal 1 — Ollama
+ollama serve
+```
+
+### Step 3 — Install dependencies
+
+**Unix / macOS:**
+```bash
 ./install.sh
-# Edit config.yaml — set 'model:' to the model you pulled
-./start.sh
 ```
 
 **Windows:**
 ```bat
-git clone https://github.com/<your-username>/codewatch.git
-cd codewatch
 install.bat
-REM Edit config.yaml — set 'model:' to the model you pulled
-start.bat
 ```
 
-Then open **http://localhost:8000** in your browser.
+This creates a Python virtualenv, installs backend requirements, runs `npm install` in `frontend/`, and builds the frontend bundle.
+
+### Step 4 — Configure
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+Open `config.yaml` and set `model:` to the exact tag shown by `ollama list`, e.g. `model: "qwen2.5-coder:7b"`.
+
+### Step 5 — Start the backend
+
+```bash
+# Terminal 2 — Backend
+# Unix / macOS:
+source .venv/bin/activate
+uvicorn backend.main:app --reload --port 8000
+
+# Windows:
+.venv\Scripts\activate
+uvicorn backend.main:app --reload --port 8000
+```
+
+**Keep this terminal visible** — its logs are how you diagnose problems. You should see:
+
+```
+[INFO] backend.services.watcher: File watcher started
+[INFO] backend.main: CodeWatch is ready. Open http://localhost:8000
+```
+
+### Step 6 — (Optional) Start the frontend dev server
+
+Only needed if you're hacking on the UI. The backend already serves the built frontend at `http://localhost:8000`.
+
+```bash
+# Terminal 3 — Frontend (optional)
+cd frontend
+npm run dev      # http://localhost:5173, proxies to backend
+```
+
+### Step 7 — Add your first project
+
+1. Open **http://localhost:8000** in a browser.
+2. Click the **+** button in the sidebar.
+3. Enter a name and the **absolute path** to a project folder you want reviewed (e.g. `D:\Projects\my-app` or `/home/you/projects/my-app`).
+4. Save. The backend log should print `Watching project '<name>' at <path>`.
+
+### Step 8 — Trigger your first review
+
+Edit any file with a watched extension (`.py`, `.js`, `.ts`, etc.) in that project and save. Within a second or two you should see:
+
+- In the backend terminal: `Queued review: <path>`
+- In the UI: a new card appears in the feed and tokens stream in as the model generates
+
+If nothing happens, jump to the **Troubleshooting** section below.
 
 ---
 
@@ -146,20 +220,77 @@ The model name must exactly match the tag shown by `ollama list`.
 
 ## Troubleshooting
 
-**Ollama not running**
-```bash
-ollama serve   # or launch the Ollama desktop app
+> **Golden rule:** when anything goes wrong, **look at the backend terminal first.** Almost every problem logs a clear message there. The UI alone will not tell you what's wrong.
+
+### Reviews never start when I save a file
+
+Work through these in order:
+
+**1. Is the project registered with the watcher?**
+On backend startup you should see a line like `Watching project '<name>' at <path>`. If not, open the UI and click **+** to add the project. The path must be absolute and must exist.
+
+**2. Did the backend crash on reload?**
+`uvicorn --reload` restarts on every file save. If your edit introduced a `SyntaxError` or `ImportError` *anywhere in the codebase*, the backend silently crashes — the UI stays loaded but nothing works. Scroll the backend terminal for a traceback. Common culprits: a stray character left in a Python file, a comment without `#`, an import that doesn't exist.
+
+**3. Is the reviewer crashing when a review runs?**
+Even with the watcher healthy, the reviewer imports project modules each time. If `backend/utils/language.py` or another module has a SyntaxError, *every* review fails with `SyntaxError: invalid syntax` in the queue worker log, and no output reaches the UI. Fix the broken file.
+
+**4. Are watchdog events firing at all?**
+Temporarily add this to `backend/services/watcher.py` inside `ProjectHandler.on_modified`:
+```python
+logger.info("watchdog: %s", event.src_path)
 ```
+Save a file in the watched project. If nothing logs, watchdog isn't seeing OS events — possible causes: antivirus interception, files on a network drive, or an editor that uses atomic-rename saves (add an `on_moved` handler for that).
 
-**Model name mismatch** — run `ollama list` and copy the exact tag (e.g. `qwen2.5-coder:3b`) into `config.yaml`.
+**5. Is the file being filtered out?**
+A save can reach the watcher but get rejected by these gates (in order):
+- Extension not in `watch_extensions`
+- Path contains any string in `ignore_patterns`
+- `respect_gitignore: true` and the file is `.gitignore`'d
+- File is binary (null bytes in first 8KB)
+- File exceeds `max_file_lines` (default 400)
+- `skip_unchanged: true` and content hash is identical to the last review
 
-**Connection refused on port 11434** — check your firewall and confirm Ollama is listening: `curl http://localhost:11434/api/tags`
+Set `log_level: DEBUG` in `config.yaml` to see `Skipping …` messages with the reason.
 
-**Port 8000 already in use** — edit `start.sh`/`start.bat` and pass `--port 8001` to uvicorn.
+### Reviews are useless / hallucinate issues / every review is marked critical
 
-**Slow reviews** — try a smaller/quantised model (e.g. `qwen2.5-coder:3b` Q4), or increase `debounce_seconds` to reduce review frequency.
+**Your model is too small.** Models in the 3–4B range frequently invent issues, miss real bugs, and echo severity words from the prompt. Pull a 7B+ code-tuned model (`qwen2.5-coder:7b`, `deepseek-coder-v2`) and set it in `config.yaml`.
 
-**Reviews not triggering** — check that the file extension is in `watch_extensions` and the path isn't matched by `ignore_patterns` or `.gitignore`.
+If severity still looks wrong after that, the model is probably not emitting the expected `### [critical|warning|suggestion]` header format — the severity detector in `reviewer.py` falls back to keyword matching, which can misfire if the model quotes rule text verbatim.
+
+### Ollama connection refused (port 11434)
+
+```bash
+curl http://localhost:11434/api/tags
+```
+If this fails, Ollama isn't running or a firewall is blocking it. Start it with `ollama serve` or launch the desktop app.
+
+### Model name mismatch
+
+The `model:` value in `config.yaml` must match a tag from `ollama list` **exactly**, including the `:tag` suffix (e.g. `qwen2.5-coder:7b`, not `qwen2.5-coder`).
+
+### Port 8000 already in use
+
+```bash
+uvicorn backend.main:app --reload --port 8001
+```
+Then open `http://localhost:8001` instead.
+
+### Reviews feel extremely slow
+
+- Use a smaller quantisation (e.g. `:7b-instruct-q4_K_M`)
+- Increase `debounce_seconds` so rapid saves don't queue multiple reviews
+- Lower `prompt_max_chars` to send less context
+- Set `review_mode: always_diff` after the first review of a file
+
+### I broke it — how do I start over?
+
+```bash
+rm codewatch.db         # wipes all projects and review history
+# restart backend
+```
+Configuration stays in `config.yaml`; only the SQLite DB is reset.
 
 ---
 

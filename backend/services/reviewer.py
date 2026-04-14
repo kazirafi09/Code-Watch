@@ -141,10 +141,27 @@ class Reviewer:
 
 
 def _detect_severity(text: str) -> str:
-    lower = text.lower()
-    if any(word in lower for word in ("critical", "security", "vulnerability", "exploit", "injection")):
+    import re
+
+    # New structured format: "### [critical] ...", "### [warning] ...", "### [suggestion] ..."
+    # Only count headers inside an actual "## Issues" section, not the rules preamble.
+    issues_section = re.split(r"(?im)^##\s+issues\s*$", text, maxsplit=1)
+    body = issues_section[1] if len(issues_section) > 1 else text
+
+    tags = [m.group(1).lower() for m in re.finditer(r"###\s*\[(critical|warning|suggestion)\]", body, re.I)]
+    if "critical" in tags:
         return "critical"
-    if any(word in lower for word in ("warning", "bug", "error", "unsafe", "deprecated")):
+    if "warning" in tags:
+        return "warning"
+    if "suggestion" in tags:
+        return "suggestion"
+
+    # Fallback for free-form output from models that ignored the format.
+    # Require whole-word matches and skip obvious rule-echo phrases.
+    lower = body.lower()
+    if re.search(r"\b(vulnerability|exploit|command injection|sql injection|rce)\b", lower):
+        return "critical"
+    if re.search(r"\b(bug|unsafe|race condition|deadlock|data loss)\b", lower):
         return "warning"
     return "suggestion"
 

@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import difflib
 import hashlib
 import logging
@@ -8,14 +7,14 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache: (project_id, path_str) -> content_hash
+# In-memory caches keyed by (project_id, path_str).
 _last_hash: dict[tuple[int, str], str] = {}
-# In-memory cache: (project_id, path_str) -> last reviewed content
 _last_content: dict[tuple[int, str], str] = {}
 
 
 def _hash(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+    encoded = content.encode("utf-8", errors="replace")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _is_git_repo(path: Path) -> bool:
