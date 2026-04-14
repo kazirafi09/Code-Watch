@@ -8,6 +8,8 @@
 
 ![screenshot](docs/screenshot.png)
 
+![Architecture](codewatch_architecture.svg)
+
 ## What it does
 
 CodeWatch watches a project folder for file changes, automatically sends changed files to a local LLM running via [Ollama](https://ollama.com), and streams the code review results to a web dashboard in real time. Everything runs locally — no cloud, no telemetry, your code stays on your machine.
