@@ -6,4 +6,11 @@ frontend/dist/
 config.yaml
 .env
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 .DS_Store
+.ruff_cache/
+.pytest_cache/
+/Competitive Landscape.pdf
+/.codewatch/

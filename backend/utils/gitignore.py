@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import pathspec
+
     _PATHSPEC_AVAILABLE = True
 except ImportError:
     _PATHSPEC_AVAILABLE = False

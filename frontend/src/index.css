@@ -3,21 +3,69 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
-    @apply bg-gray-950 text-gray-100 font-mono;
+    @apply bg-surface-0 text-slate-100 font-sans antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, 0.08), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, rgba(139, 92, 246, 0.06), transparent 60%);
+    background-attachment: fixed;
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-gray-900;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700 rounded;
+    @apply bg-slate-700/60 rounded-full border-2 border-transparent bg-clip-padding;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-600;
+    @apply bg-slate-600/80;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-accent-600 hover:bg-accent-500 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply btn text-slate-400 hover:text-slate-100 hover:bg-white/5;
+  }
+  .btn-secondary {
+    @apply btn bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10;
+  }
+  .btn-danger {
+    @apply btn bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20;
+  }
+  .input {
+    @apply w-full bg-surface-2 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100
+      placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/40
+      transition;
+  }
+  .card {
+    @apply bg-surface-1 border border-white/5 rounded-xl;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

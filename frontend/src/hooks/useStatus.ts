@@ -7,6 +7,7 @@ export function useStatus() {
     ollama_ok: false,
     model: '',
     queue_depth: 0,
+    pending_reviews: 0,
     last_duration_ms: null,
     tokens_per_sec: null,
   })

@@ -75,10 +75,12 @@ async def update_config(patch: dict[str, Any]) -> dict[str, Any]:
 
     # Trigger watcher reload
     from backend.services.watcher import watcher_supervisor
+
     watcher_supervisor.reload_config()
 
     # Restart queue workers if concurrency changed
     from backend.services.queue import review_queue
+
     new_cfg = cfg_module.get_config()
     await review_queue.restart_workers(new_cfg.max_concurrency)
 

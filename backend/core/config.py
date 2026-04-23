@@ -1,15 +1,39 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
+import socket
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
+
+
+def _host_is_local_or_private(host: str) -> bool:
+    """True if host resolves only to loopback or RFC1918/ULA/link-local addresses."""
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        # Unresolvable — refuse rather than silently allow.
+        return False
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            return False
+        if not (ip.is_loopback or ip.is_private or ip.is_link_local):
+            return False
+    return True
+
 
 CONFIG_PATH = Path("config.yaml")
 ENV_PATH = Path(".env")
@@ -33,14 +57,37 @@ class AppConfig(BaseSettings):
     model: str = ""
     ollama_url: str = "http://localhost:11434"
     ollama_timeout_seconds: int = 120
+    ollama_temperature: float = 0.2  # low for reproducible reviews; raise for variety
+    ollama_seed: int | None = 42  # set to None to re-enable stochasticity
+    ollama_num_predict: int = 2048  # cap model output; the checklist+issues+JSON fits easily
 
     # Watching
     watch_extensions: list[str] = [
-        ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs",
-        ".java", ".cpp", ".c", ".h", ".rb", ".php", ".cs", ".kt", ".swift",
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".cpp",
+        ".c",
+        ".h",
+        ".rb",
+        ".php",
+        ".cs",
+        ".kt",
+        ".swift",
     ]
     ignore_patterns: list[str] = [
-        "node_modules", "__pycache__", ".git", "dist", "build", ".venv", ".env",
+        "node_modules",
+        "__pycache__",
+        ".git",
+        "dist",
+        "build",
+        ".venv",
+        ".env",
     ]
     respect_gitignore: bool = True
     debounce_seconds: float = 1.5
@@ -51,6 +98,7 @@ class AppConfig(BaseSettings):
     review_mode: str = "auto"
     max_concurrency: int = 1
     prompt_max_chars: int = 16000
+    min_confidence: float = 0.5  # drop issues below this from severity classification
 
     # Notifications
     notifications: NotificationSettings = NotificationSettings()
@@ -66,6 +114,33 @@ class AppConfig(BaseSettings):
         allowed = {"auto", "always_full", "always_diff"}
         if v not in allowed:
             raise ValueError(f"review_mode must be one of {allowed}")
+        return v
+
+    @field_validator("min_confidence")
+    @classmethod
+    def validate_min_confidence(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("min_confidence must be between 0.0 and 1.0")
+        return v
+
+    @field_validator("ollama_url")
+    @classmethod
+    def validate_ollama_url(cls, v: str) -> str:
+        # SSRF guard: the reviewer sends file contents to this URL, so a
+        # malicious `ollama_url` could exfiltrate source to an arbitrary host
+        # or probe internal services. Restrict to loopback/RFC1918 unless
+        # CODEWATCH_ALLOW_REMOTE_OLLAMA=1 is set.
+        if os.environ.get("CODEWATCH_ALLOW_REMOTE_OLLAMA") == "1":
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("ollama_url must be an http(s) URL")
+        host = parsed.hostname or ""
+        if not _host_is_local_or_private(host):
+            raise ValueError(
+                f"ollama_url host {host!r} is not loopback/RFC1918. "
+                "Set CODEWATCH_ALLOW_REMOTE_OLLAMA=1 to override."
+            )
         return v
 
 

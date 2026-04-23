@@ -1,15 +1,28 @@
 from __future__ import annotations
+
 import difflib
 import hashlib
 import logging
 import subprocess
+from collections import OrderedDict
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# In-memory caches keyed by (project_id, path_str).
-_last_hash: dict[tuple[int, str], str] = {}
-_last_content: dict[tuple[int, str], str] = {}
+# Bounded LRU caches keyed by (project_id, path_str). Unbounded dicts would
+# grow without limit across long-lived watcher sessions (one entry per file
+# per project, forever), holding onto full source text in memory.
+_DIFF_CACHE_MAX = 2000
+_last_hash: OrderedDict[tuple[int, str], str] = OrderedDict()
+_last_content: OrderedDict[tuple[int, str], str] = OrderedDict()
+
+
+def _remember(key: tuple[int, str], content: str, content_hash: str) -> None:
+    for cache, value in ((_last_content, content), (_last_hash, content_hash)):
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > _DIFF_CACHE_MAX:
+            cache.popitem(last=False)
 
 
 def _hash(content: str) -> str:
@@ -53,8 +66,7 @@ def compute_diff(
 
     if key not in _last_content:
         # First review — store snapshot and return full content
-        _last_content[key] = current_content
-        _last_hash[key] = current_hash
+        _remember(key, current_content, current_hash)
         return "full", current_content
 
     previous_content = _last_content[key]
@@ -63,8 +75,7 @@ def compute_diff(
     if _is_git_repo(project_path):
         git_diff = _git_diff(project_path, file_path)
         if git_diff:
-            _last_content[key] = current_content
-            _last_hash[key] = current_hash
+            _remember(key, current_content, current_hash)
             return "diff", git_diff
 
     # Fall back to unified diff
@@ -80,8 +91,7 @@ def compute_diff(
         )
     )
 
-    _last_content[key] = current_content
-    _last_hash[key] = current_hash
+    _remember(key, current_content, current_hash)
 
     if not diff_lines:
         return "full", current_content

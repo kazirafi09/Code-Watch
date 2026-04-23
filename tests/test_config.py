@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import pytest
 import yaml
 
 
 def test_default_config_loads():
     import backend.core.config as cfg_mod
+
     cfg_mod._config = None
     # Without config.yaml, defaults should apply
     cfg = cfg_mod._build_config()
@@ -49,6 +47,9 @@ def test_secrets_not_written_to_yaml(tmp_path, monkeypatch):
 
 
 def test_invalid_review_mode_raises():
+    from pydantic import ValidationError
+
     import backend.core.config as cfg_mod
-    with pytest.raises(Exception):
+
+    with pytest.raises(ValidationError):
         cfg_mod.AppConfig(review_mode="invalid_mode")

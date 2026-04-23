@@ -1,0 +1,7 @@
+- id: codewatch
+  name: CodeWatch review
+  description: "Run a local AI code review on changed files and fail on critical issues."
+  entry: codewatch review --fail-on critical
+  language: python
+  types: [text]
+  files: '\.(py|js|jsx|ts|tsx|go|rs|java|rb|cpp|c|h|cs|kt|swift|php)$'

@@ -11,7 +11,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 if TYPE_CHECKING:
-    from backend.models.project import Project
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,9 @@ class ProjectHandler(FileSystemEventHandler):
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
             if len(lines) > cfg.max_file_lines:
-                logger.debug("Skipping %s — exceeds max_file_lines (%d)", path_str, cfg.max_file_lines)
+                logger.debug(
+                    "Skipping %s — exceeds max_file_lines (%d)", path_str, cfg.max_file_lines
+                )
                 return False
         except Exception:
             return False
@@ -104,6 +106,7 @@ class ProjectHandler(FileSystemEventHandler):
             self._last_hashes[path_str] = current_hash
 
         from backend.services.queue import ReviewJob, review_queue
+
         job = ReviewJob(project_id=self._project.id, path=path_str)
         asyncio.run_coroutine_threadsafe(review_queue.enqueue(job), self._loop)
         logger.info("Queued review: %s", path_str)
@@ -126,9 +129,16 @@ class ProjectHandler(FileSystemEventHandler):
         if not event.is_directory:
             self._schedule(str(event.src_path))
 
+    def stop(self) -> None:
+        with self._lock:
+            for timer in self._debounce_timers.values():
+                timer.cancel()
+            self._debounce_timers.clear()
+
     def reload_config(self) -> None:
         from backend.core.config import get_config
         from backend.utils.gitignore import GitignoreMatcher
+
         self._cfg = get_config()
         self._gitignore = GitignoreMatcher(self._project_path)
 
@@ -148,6 +158,8 @@ class WatcherSupervisor:
 
     def stop(self) -> None:
         if self._started:
+            for handler, _ in self._handlers.values():
+                handler.stop()
             self._observer.stop()
             self._observer.join()
             self._started = False
@@ -167,6 +179,7 @@ class WatcherSupervisor:
         if project_id not in self._handlers:
             return
         handler, watch = self._handlers.pop(project_id)
+        handler.stop()
         self._observer.unschedule(watch)
         logger.info("Stopped watching project %d", project_id)
 

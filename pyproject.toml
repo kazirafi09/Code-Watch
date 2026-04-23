@@ -1,10 +1,34 @@
+[project]
+name = "codewatch"
+version = "1.0.0"
+description = "Local AI code review tool."
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[project.scripts]
+codewatch = "backend.cli.main:main"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "eval: prompt-quality eval against a live Ollama; opt in with `-m eval`.",
+]
+# Skip the eval suite by default — it needs a running Ollama.
+addopts = "-m 'not eval'"
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Eval fixtures intentionally contain unsafe / stylistically awful code —
+# the whole point is to see if the reviewer flags it. Don't lint them.
+exclude = ["tests/eval/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF"]

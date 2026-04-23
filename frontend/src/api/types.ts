@@ -14,7 +14,7 @@ export interface Review {
   language: string
   full_text: string
   severity: 'critical' | 'warning' | 'suggestion' | 'pending'
-  mode: 'full' | 'diff'
+  mode: 'full' | 'diff' | 'full+diff'
   prompt_tokens: number
   completion_tokens: number
   duration_ms: number
@@ -32,6 +32,7 @@ export interface StatusResponse {
   ollama_ok: boolean
   model: string
   queue_depth: number
+  pending_reviews: number
   last_duration_ms: number | null
   tokens_per_sec: number | null
 }
@@ -69,7 +70,7 @@ export interface AppConfig {
 export type WsEvent =
   | { type: 'review_start'; review_id: string; project_id: number; filename: string; timestamp: string }
   | { type: 'review_token'; review_id: string; token: string }
-  | { type: 'review_done'; review_id: string; full_text: string; severity: string }
+  | { type: 'review_done'; review_id: string; full_text: string; severity: string; mode: 'full' | 'diff' | 'full+diff' }
   | { type: 'queue_update'; depth: number }
   | { type: 'status_update'; ollama_ok: boolean; model: string; queue_depth: number; last_duration_ms: number | null; tokens_per_sec: number | null }
   | { type: 'toast'; level: 'error' | 'warning' | 'info' | 'success'; message: string }

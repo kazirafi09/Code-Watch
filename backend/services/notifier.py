@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 async def notify(severity: str, filename: str, review_text: str) -> None:
     from backend.core.config import get_config
+
     cfg = get_config()
     notif = cfg.notifications
 
@@ -27,6 +28,7 @@ async def notify(severity: str, filename: str, review_text: str) -> None:
 def _desktop_notify(severity: str, filename: str, summary: str) -> None:
     try:
         from plyer import notification
+
         notification.notify(
             title=f"CodeWatch — {severity.upper()}",
             message=f"{filename}\n{summary}",
@@ -42,13 +44,17 @@ async def _telegram_notify(
 ) -> None:
     try:
         import httpx
+
         message = f"*CodeWatch — {severity.upper()}*\n`{filename}`\n\n{text}"
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={
-                "chat_id": chat_id,
-                "text": message,
-                "parse_mode": "Markdown",
-            })
+            await client.post(
+                url,
+                json={
+                    "chat_id": chat_id,
+                    "text": message,
+                    "parse_mode": "Markdown",
+                },
+            )
     except Exception as exc:
         logger.debug("Telegram notification failed: %s", exc)

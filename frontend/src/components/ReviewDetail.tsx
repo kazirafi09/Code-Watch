@@ -2,6 +2,7 @@ import { api } from '../api/client'
 import type { Review } from '../api/types'
 import { formatDuration, formatTimestamp, basename } from '../lib/format'
 import { severityBadge } from '../lib/severity'
+import { ReviewMarkdown } from './ReviewMarkdown'
 
 interface Props {
   review: Review
@@ -10,11 +11,16 @@ interface Props {
   onClose: () => void
 }
 
-function highlightSeverity(text: string): string {
-  return text
-    .replace(/\b(critical|security|vulnerability|exploit|injection)\b/gi, '<span class="text-red-400 font-semibold">$1</span>')
-    .replace(/\b(warning|bug|error|unsafe|deprecated)\b/gi, '<span class="text-amber-400">$1</span>')
-    .replace(/\b(suggestion|recommend|consider|improve)\b/gi, '<span class="text-blue-400">$1</span>')
+function modeLabel(mode: string): string {
+  if (mode === 'full+diff') return 'full + diff'
+  if (mode === 'diff') return 'diff only'
+  return 'full file'
+}
+
+function modeTooltip(mode: string): string {
+  if (mode === 'full+diff') return 'Full file plus recent diff — model has architectural context and what changed.'
+  if (mode === 'diff') return 'Diff-only review — model only sees changed lines. Coverage may be degraded on architectural issues.'
+  return 'Full file review — model sees the whole file.'
 }
 
 export function ReviewDetail({ review, isStreaming, onDelete, onClose }: Props) {
@@ -32,61 +38,92 @@ export function ReviewDetail({ review, isStreaming, onDelete, onClose }: Props) 
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 border-l border-gray-800">
+    <div className="flex flex-col h-full bg-surface-1 md:border-l border-white/5 shadow-2xl md:shadow-none">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between shrink-0">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${severityBadge(review.severity)}`}>
+      <div className="px-5 py-4 border-b border-white/5 flex items-start justify-between gap-3 shrink-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className={`chip ${severityBadge(review.severity)} capitalize`}>
               {review.severity}
             </span>
-            <span className="text-sm font-mono text-gray-200 truncate">{basename(review.filename)}</span>
+            {isStreaming && (
+              <span className="chip bg-accent-500/15 text-accent-300 border border-accent-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-400 animate-pulse" />
+                Streaming
+              </span>
+            )}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">{formatTimestamp(review.created_at)}</div>
+          <h2 className="text-sm font-mono text-slate-100 truncate" title={review.filename}>
+            {basename(review.filename)}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">{formatTimestamp(review.created_at)}</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-white ml-2 shrink-0">×</button>
+        <button onClick={onClose} className="btn-ghost p-1.5" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
 
       {/* Meta */}
-      <div className="px-4 py-2 border-b border-gray-800 flex gap-4 text-xs text-gray-500 shrink-0">
-        <span>Lang: <span className="text-gray-400">{review.language || '—'}</span></span>
-        <span>Mode: <span className="text-gray-400">{review.mode}</span></span>
+      <div className="px-5 py-3 border-b border-white/5 grid grid-cols-2 gap-2 text-xs shrink-0 bg-surface-2/30">
+        <div className="flex flex-col">
+          <span className="text-slate-500 text-[10px] uppercase tracking-wider">Language</span>
+          <span className="text-slate-200 mt-0.5">{review.language || '—'}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-slate-500 text-[10px] uppercase tracking-wider">Mode</span>
+          <span className="text-slate-200 mt-0.5" title={modeTooltip(review.mode)}>{modeLabel(review.mode)}</span>
+        </div>
         {review.duration_ms > 0 && (
-          <span>Duration: <span className="text-gray-400">{formatDuration(review.duration_ms)}</span></span>
+          <div className="flex flex-col">
+            <span className="text-slate-500 text-[10px] uppercase tracking-wider">Duration</span>
+            <span className="text-slate-200 mt-0.5">{formatDuration(review.duration_ms)}</span>
+          </div>
         )}
-        <span className="truncate text-gray-600" title={review.filename}>{review.filename}</span>
+        <div className="flex flex-col col-span-2 min-w-0">
+          <span className="text-slate-500 text-[10px] uppercase tracking-wider">Path</span>
+          <span className="text-slate-400 mt-0.5 truncate font-mono text-[11px]" title={review.filename}>
+            {review.filename}
+          </span>
+        </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div
-          className="text-sm font-mono text-gray-300 leading-relaxed whitespace-pre-wrap"
-          dangerouslySetInnerHTML={{ __html: highlightSeverity(review.full_text) }}
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <ReviewMarkdown
+          text={review.full_text}
+          className="text-sm text-slate-200 leading-relaxed"
         />
         {isStreaming && (
-          <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-0.5 align-middle" />
+          <span className="inline-block w-2 h-4 bg-accent-400 animate-pulse ml-0.5 align-middle" />
         )}
       </div>
 
       {/* Actions */}
       {!isStreaming && (
-        <div className="px-4 py-3 border-t border-gray-800 flex gap-3 shrink-0">
-          <button
-            onClick={handleCopy}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded"
-          >
+        <div className="px-5 py-3 border-t border-white/5 flex gap-2 shrink-0 bg-surface-2/30">
+          <button onClick={handleCopy} className="btn-secondary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
             Copy
           </button>
-          <button
-            onClick={handleExport}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded"
-          >
+          <button onClick={handleExport} className="btn-secondary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
             Export .md
           </button>
-          <button
-            onClick={() => onDelete(review.id)}
-            className="text-xs bg-red-900 hover:bg-red-800 text-red-200 px-3 py-1.5 rounded ml-auto"
-          >
+          <button onClick={() => onDelete(review.id)} className="btn-danger ml-auto">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
             Delete
           </button>
         </div>

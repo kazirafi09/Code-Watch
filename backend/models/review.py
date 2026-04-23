@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
@@ -24,7 +23,7 @@ class Review(SQLModel, table=True):
     language: str = ""
     full_text: str = ""
     severity: str = ReviewStatus.pending.value
-    mode: str = "full"  # "full" | "diff"
+    mode: str = "full"  # "full" | "diff" | "full+diff"
     prompt_tokens: int = 0
     completion_tokens: int = 0
     duration_ms: int = 0

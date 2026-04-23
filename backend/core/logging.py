@@ -9,6 +9,7 @@ from typing import Any
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         import json
+
         log_entry: dict[str, Any] = {
             "level": record.levelname,
             "logger": record.name,

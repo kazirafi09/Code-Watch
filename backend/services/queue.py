@@ -46,8 +46,10 @@ class ReviewQueue:
     async def enqueue(self, job: ReviewJob) -> None:
         key = (job.project_id, job.path)
         if key in self._pending:
-            # Replace — remove old, add new
+            # Replace in-place — worker will see new job_id and skip the stale queued entry;
+            # put the replacement on the queue so it actually gets processed.
             self._pending[key] = job
+            await self._queue.put(job)
             logger.debug("Replaced pending job for %s", job.path)
         else:
             self._pending[key] = job
@@ -87,11 +89,25 @@ class ReviewQueue:
     async def _broadcast_queue_update(self) -> None:
         from backend.core.ws_manager import manager
         from backend.models.events import QueueUpdate
+
         await manager.broadcast(QueueUpdate(depth=self.depth).model_dump())
 
     @property
     def depth(self) -> int:
-        return self._queue.qsize() + len(self._pending)
+        return len(self._pending)
+
+    async def clear(self) -> int:
+        count = self._queue.qsize()
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+        self._pending.clear()
+        await self._broadcast_queue_update()
+        logger.info("ReviewQueue cleared (%d jobs removed)", count)
+        return count
 
     async def restart_workers(self, max_concurrency: int) -> None:
         await self.stop()

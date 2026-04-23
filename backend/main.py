@@ -5,17 +5,18 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.core import config as cfg_module
+from backend.core.auth import get_or_create_token, is_auth_enabled, require_token
 from backend.core.database import init_db
 from backend.core.logging import setup_logging
 from backend.core.ws_manager import manager
 from backend.models.events import Toast
-from backend.routers import config, projects, reviews, status, ws
+from backend.routers import config, health, projects, reviews, status, ws
 from backend.services.queue import review_queue
 from backend.services.reviewer import reviewer
 from backend.services.watcher import watcher_supervisor
@@ -23,6 +24,10 @@ from backend.services.watcher import watcher_supervisor
 logger = logging.getLogger(__name__)
 
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+
+# Keep strong refs to fire-and-forget tasks so the event loop doesn't GC them
+# mid-flight (the asyncio docs are explicit about this; ruff flags it as RUF006).
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -33,6 +38,17 @@ async def lifespan(app: FastAPI):
     logger.info("Starting CodeWatch...")
 
     init_db()
+
+    if is_auth_enabled():
+        token = get_or_create_token()
+        logger.info("Bearer auth enabled. Access URL: http://localhost:8000/?token=%s", token)
+
+    # Remove reviews that were left in "pending" by a previous interrupted run
+    from backend.core.database import cleanup_pending_reviews
+
+    removed = cleanup_pending_reviews()
+    if removed:
+        logger.info("Cleaned up %d orphaned pending review(s) from previous run", removed)
 
     # Wire up reviewer into queue
     review_queue.set_reviewer(reviewer)
@@ -46,6 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Watch all active projects
     from backend.core.database import get_projects
+
     for project in get_projects():
         if project.is_active:
             watcher_supervisor.add_project(project)
@@ -77,11 +94,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Routers
-    app.include_router(projects.router)
-    app.include_router(reviews.router)
-    app.include_router(config.router)
-    app.include_router(status.router)
+    # Routers. Health is public (liveness/readiness probes must be reachable
+    # without credentials). Everything else is gated by require_token when
+    # CODEWATCH_REQUIRE_TOKEN=1; otherwise the dep is a no-op.
+    app.include_router(health.router)
+    protected = [Depends(require_token)]
+    app.include_router(projects.router, dependencies=protected)
+    app.include_router(reviews.router, dependencies=protected)
+    app.include_router(config.router, dependencies=protected)
+    app.include_router(status.router, dependencies=protected)
     app.include_router(ws.router)
 
     # Serve built frontend
@@ -103,9 +124,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled exception: %s", exc)
-        asyncio.create_task(
+        task = asyncio.create_task(
             manager.broadcast(Toast(level="error", message=str(exc)).model_dump())
         )
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error", "message": str(exc)},

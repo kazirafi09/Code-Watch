@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 
 def test_gitignore_matches_ignored_file(temp_project_dir):
     from backend.utils.gitignore import GitignoreMatcher

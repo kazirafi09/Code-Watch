@@ -1,8 +1,10 @@
 # Ollama
-model: "gemma4:e4b"  # Set to a model you've pulled (e.g. qwen2.5-coder:3b, llama3.2, codellama)
+model: "qwen2.5-coder:7b"  # Set to a model you've pulled (e.g. qwen2.5-coder:3b, llama3.2, codellama)
 ollama_url: http://localhost:11434
 ollama_timeout_seconds: 120
-
+ollama_temperature: 0.2       # low = reproducible, high = varied
+ollama_seed: 42               # pin for reproducible runs; remove for stochastic
+ollama_num_predict: 2048      # max output tokens per review
 # Watching
 watch_extensions:
   - .py
@@ -35,9 +37,10 @@ max_file_lines: 400
 skip_unchanged: true
 
 # Review behavior
-review_mode: auto    # auto (diff when possible, full otherwise) | always_full | always_diff
+review_mode: auto    # auto (full+diff on small files, diff on large) | always_full | always_diff
 max_concurrency: 1   # Local LLM — 1 is usually best
 prompt_max_chars: 16000
+min_confidence: 0.5  # drop issues below this confidence from severity classification
 
 # Notifications
 notifications:

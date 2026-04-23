@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import SQLModel, create_engine
 
 # Use in-memory SQLite for tests
 TEST_DB_URL = "sqlite:///./test_codewatch.db"
@@ -55,6 +54,7 @@ def mock_ollama(mocker):
 def reset_config_state():
     """Reset module-level config singleton between tests."""
     import backend.core.config as cfg_mod
+
     original = cfg_mod._config
     yield
     cfg_mod._config = original

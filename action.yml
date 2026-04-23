@@ -1,0 +1,73 @@
+name: "CodeWatch Review"
+description: "Run a CodeWatch review over changed files in a PR and fail on critical issues."
+author: "CodeWatch"
+branding:
+  icon: "eye"
+  color: "purple"
+
+inputs:
+  model:
+    description: "Ollama model tag to use (e.g. qwen2.5-coder:7b)."
+    required: true
+  ollama-url:
+    description: "Ollama base URL. Defaults to http://localhost:11434."
+    required: false
+    default: "http://localhost:11434"
+  fail-on:
+    description: "Minimum severity that fails the job: critical | warning | suggestion."
+    required: false
+    default: "critical"
+  paths:
+    description: "Newline-separated list of files to review. Defaults to changed files in the PR."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install CodeWatch
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install "${GITHUB_ACTION_PATH}"
+
+    - name: Resolve target files
+      id: resolve
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.paths }}" ]; then
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${{ inputs.paths }}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+        else
+          git fetch origin "$GITHUB_BASE_REF" --depth=1
+          changed=$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.go' '*.rs' '*.java' '*.rb' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run CodeWatch
+      shell: bash
+      env:
+        CODEWATCH_ALLOW_REMOTE_OLLAMA: "1"
+      run: |
+        set -eu
+        cat > config.yaml <<YAML
+        model: "${{ inputs.model }}"
+        ollama_url: "${{ inputs.ollama-url }}"
+        YAML
+
+        files="${{ steps.resolve.outputs.files }}"
+        if [ -z "$files" ]; then
+          echo "No files to review."
+          exit 0
+        fi
+        worst=0
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          [ -f "$f" ] || continue
+          codewatch review "$f" --fail-on "${{ inputs.fail-on }}" || rc=$?
+          if [ "${rc:-0}" -gt "$worst" ]; then worst=${rc:-0}; fi
+        done <<< "$files"
+        exit "$worst"

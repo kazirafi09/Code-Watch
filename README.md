@@ -287,6 +287,54 @@ Configuration stays in `config.yaml`; only the SQLite DB is reset.
 
 ---
 
+## CLI (pre-commit / CI)
+
+CodeWatch ships a `codewatch` console script that runs a one-shot review against a local Ollama and exits non-zero when issues are found. It does **not** require the FastAPI server to be running — it reads `config.yaml` from the current directory for `model` and `ollama_url`.
+
+```bash
+pip install -e .    # from the repo root, once
+codewatch review path/to/file.py --fail-on critical
+```
+
+Exit codes: `0` clean / `1` review completed but severity ≥ `--fail-on` found / `2` reviewer could not run (Ollama down, file missing, no model configured).
+
+### pre-commit hook
+
+Add to `.pre-commit-config.yaml`:
+
+```yaml
+- repo: local
+  hooks:
+    - id: codewatch
+      name: CodeWatch review
+      entry: codewatch review --fail-on critical
+      language: system
+      files: '\.(py|js|jsx|ts|tsx|go|rs|java|rb|cpp|c|h|cs|kt|swift|php)$'
+```
+
+### GitHub Action
+
+The repo exposes a composite action via `action.yml`:
+
+```yaml
+- uses: kazirafi09/Code-Watch@main
+  with:
+    model: qwen2.5-coder:7b
+    fail-on: critical
+```
+
+The action runs `codewatch review` over every changed file in the PR (or an explicit `paths:` input) and fails the job if a critical issue is reported. You'll need Ollama reachable from the runner — the simplest path is a self-hosted runner with `ollama serve` running locally.
+
+---
+
+## Hardening (optional)
+
+- **Bind to loopback only.** `start.sh` / `start.bat` pass `--host 127.0.0.1` by default. If you change that flag, set `CODEWATCH_REQUIRE_TOKEN=1` before `uvicorn` so every `/api/*` request and the `/ws` connection requires a bearer token. The token is written to `~/.codewatch/token` on first boot and printed in the log with a ready-to-use `http://localhost:8000/?token=<value>` URL.
+- **SSRF guard on `ollama_url`.** The backend rejects any `ollama_url` whose host doesn't resolve to loopback/RFC1918/link-local. Set `CODEWATCH_ALLOW_REMOTE_OLLAMA=1` only if you intentionally point at a remote Ollama.
+- **Liveness/readiness.** `GET /livez` (always 200) and `GET /healthz` (200/503 with per-dep checks) are public so Docker/k8s/uptime probes can reach them without credentials.
+
+---
+
 ## Docker
 
 ```bash

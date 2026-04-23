@@ -45,6 +45,7 @@ export const api = {
   // Status & models
   getStatus: () => request<StatusResponse>('/api/status'),
   getModels: () => request<ModelsResponse>('/api/models'),
+  clearQueue: () => request<{ removed: number }>('/api/queue', { method: 'DELETE' }),
 
   // Config
   getConfig: () => request<AppConfig>('/api/config'),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -29,9 +29,9 @@ class TriggerRequest(BaseModel):
 
 @router.get("", response_model=ReviewsResponse)
 async def list_reviews(
-    project_id: Optional[int] = Query(None),
-    severity: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
+    project_id: int | None = Query(None),
+    severity: str | None = Query(None),
+    search: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> ReviewsResponse:
@@ -92,10 +92,22 @@ async def trigger_review(body: TriggerRequest) -> dict:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    from pathlib import Path
-    full_path = Path(project.path) / body.relative_path
-    if not full_path.exists():
-        raise HTTPException(status_code=400, detail=f"File not found: {full_path}")
+    # Reject absolute paths and any `..` escape. `resolve(strict=False)` lets
+    # us compare normalized paths even if the file doesn't exist yet.
+    rel = Path(body.relative_path)
+    if rel.is_absolute() or rel.anchor:
+        raise HTTPException(status_code=400, detail="relative_path must be relative")
+
+    project_root = Path(project.path).resolve()
+    full_path = (project_root / rel).resolve()
+
+    try:
+        full_path.relative_to(project_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="relative_path escapes project root") from exc
+
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=400, detail=f"File not found: {body.relative_path}")
 
     job = ReviewJob(project_id=body.project_id, path=str(full_path))
     await review_queue.enqueue(job)

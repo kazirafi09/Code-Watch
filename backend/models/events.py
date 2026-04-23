@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, Optional
-
 from pydantic import BaseModel
 
 
@@ -24,12 +22,12 @@ class ReviewDone(BaseModel):
     review_id: str
     full_text: str
     severity: str
+    mode: str = "full"  # "full" | "diff" | "full+diff"
 
 
 class QueueUpdate(BaseModel):
     type: str = "queue_update"
     depth: int
-    job: Optional[dict[str, Any]] = None
 
 
 class StatusUpdate(BaseModel):
@@ -37,8 +35,8 @@ class StatusUpdate(BaseModel):
     ollama_ok: bool
     model: str
     queue_depth: int
-    last_duration_ms: Optional[int] = None
-    tokens_per_sec: Optional[float] = None
+    last_duration_ms: int | None = None
+    tokens_per_sec: float | None = None
 
 
 class Toast(BaseModel):
